@@ -5,6 +5,7 @@ import {
 import { generateToken } from "../utils/authHandler.js";
 import { ErrorHandller } from "../utils/errorHandler.js";
 import { hashPassword, comparePassword } from "../utils/hashPassword.js";
+import { transporter } from "../utils/mailHandler.js";
 
 export const registerController = async (req, res, next) => {
   try {
@@ -18,6 +19,17 @@ export const registerController = async (req, res, next) => {
     const hashedPassword = await hashPassword(password);
 
     const savedData = await createUser(username, email, hashedPassword);
+    const verificationLink = `http://localhost:5173/verify-otp?userid=${savedData._id}`;
+    const verificationOTP = 123456;
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: savedData?.email,
+      subject: 'Welcome to Altimate Authentication',
+      text: `Your account has been created with email :${savedData?.email}`,
+      html: `<b>Please verify the email using the OTP ${verificationOTP} by clicking this</b> <a href=${verificationLink}>link</a>`
+    }
+
+    await transporter.sendMail(mailOptions)
     return res.status(201).json({ error: false, data: savedData });
   } catch (error) {
     next(error)
