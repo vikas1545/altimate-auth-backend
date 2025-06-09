@@ -1,3 +1,4 @@
+import { validationResult } from "express-validator";
 import {
   createUser,
   findUserByEmailOrUsername,
@@ -9,6 +10,10 @@ import { transporter } from "../utils/mailHandler.js";
 
 export const registerController = async (req, res, next) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() })
+    }
     const { username, email, password } = req.body;
     const userExist = await findUserByEmailOrUsername(email, username);
 
@@ -17,10 +22,10 @@ export const registerController = async (req, res, next) => {
     }
 
     const hashedPassword = await hashPassword(password);
-
-    const savedData = await createUser(username, email, hashedPassword);
+    const verificationOTP = Math.floor(Math.random(6) * 900000);
+    const savedData = await createUser(username, email, hashedPassword, verificationOTP);
     const verificationLink = `http://localhost:5173/verify-otp?userid=${savedData._id}`;
-    const verificationOTP = 123456;
+    //const verificationOTP = 123456;
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: savedData?.email,

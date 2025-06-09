@@ -6,10 +6,11 @@ export const findUserByEmailOrUsername = async (email, username) => {
   });
 };
 
-export const createUser = async (username, email, hashedPassword) => {
+export const createUser = async (username, email, hashedPassword, verificationOTP) => {
   const user = new User();
   user.username = username;
   user.email = email;
   user.password = hashedPassword;
+  user.otp = verificationOTP;
   return await user.save();
 };
