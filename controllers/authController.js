@@ -1,6 +1,6 @@
 
 import User from "../models/userModel.js";
-import { createUser, findUserByEmailOrUsername } from "../services/authServices.js";
+import { createUser, findUser } from "../services/authServices.js";
 import { generateToken } from "../utils/authHandler.js";
 import checkFieldsError from "../utils/checkFieldsError.js";
 import { ErrorHandller } from "../utils/errorHandler.js";
@@ -9,6 +9,35 @@ import { hashPassword, comparePassword } from "../utils/hashPassword.js";
 import { transporter } from "../utils/mailHandler.js";
 import jwt from "jsonwebtoken";
 
+export const getUserByIdController = async (req, res, next) => {
+  const userId = req.params['userId'];
+
+  if (!userId) {
+    throw new ErrorHandller("UserId is required", 400);
+  }
+
+  try {
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      throw new ErrorHandller("User not found", 404);
+    }
+
+    const userObj = user.toObject();
+
+    delete userObj.password;
+    delete userObj.refreshToken;
+    delete userObj.otp;
+
+    res.status(200).json({ message: 'Success', data: userObj })
+
+    next()
+  } catch (error) {
+    next(error)
+  }
+
+
+}
+
 export const registerController = async (req, res, next) => {
   try {
     const errors = checkFieldsError(req);
@@ -16,7 +45,7 @@ export const registerController = async (req, res, next) => {
       return res.status(400).json({ errors });
     }
     const { username, email, password } = req.body;
-    const userExist = await findUserByEmailOrUsername(email, username);
+    const userExist = await findUser({ email, username });
 
     if (userExist) {
       throw new ErrorHandller("A user with this email or username already exists.", 409);
@@ -44,7 +73,7 @@ export const registerController = async (req, res, next) => {
 export const loginController = async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
-    const user = await findUserByEmailOrUsername(email, username);
+    const user = await findUser({ email, username });
 
     if (!user) {
       throw new ErrorHandller("No user found with this email or username", 404)
@@ -81,10 +110,10 @@ export const refreshTokenController = async (req, res, next) => {
   try {
     const decoded = jwt.verify(refreshToken, "LOGIN_SECRET");
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findUser({ id: decoded.id });
 
     if (!user) {
-      return next(new ErrorHandller("User not found", 404));
+      throw new ErrorHandller("User not found", 404);
     }
     const { token: newAccessToken } = generateToken(user);
     res.clearCookie("Token");

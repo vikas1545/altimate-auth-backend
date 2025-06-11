@@ -1,9 +1,9 @@
 import express from "express";
-import { loginController, registerController } from "../controllers/authController.js";
+import { getUserByIdController, loginController, registerController } from "../controllers/authController.js";
 import { validateRegistrationRules } from "../middlewares/validationMiddlewere.js";
 const router = express.Router();
 
-router.get("/users", (req, res) => { });
+router.get("/user/:userId", getUserByIdController);
 
 router.post("/register", validateRegistrationRules, registerController);
 
