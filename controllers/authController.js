@@ -1,4 +1,5 @@
 
+import User from "../models/userModel.js";
 import { createUser, findUserByEmailOrUsername } from "../services/authServices.js";
 import { generateToken } from "../utils/authHandler.js";
 import checkFieldsError from "../utils/checkFieldsError.js";
@@ -6,6 +7,7 @@ import { ErrorHandller } from "../utils/errorHandler.js";
 import generateOtp from "../utils/generateOtp.js";
 import { hashPassword, comparePassword } from "../utils/hashPassword.js";
 import { transporter } from "../utils/mailHandler.js";
+import jwt from "jsonwebtoken";
 
 export const registerController = async (req, res, next) => {
   try {
@@ -68,3 +70,29 @@ export const loginController = async (req, res, next) => {
     next(error)
   }
 };
+
+export const refreshTokenController = async (req, res, next) => {
+  const refreshToken = req.cookie.refreshToken || req.body.refreshToken;
+
+  if (!refreshToken) {
+    throw new ErrorHandller("Refresh token is not found", 401)
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, "LOGIN_SECRET");
+
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return next(new ErrorHandller("User not found", 404));
+    }
+    const { token: newAccessToken } = generateToken(user);
+    res.clearCookie("Token");
+    const cookieOptions = { httpOnly: true, secure: true, maxAge: 60 * 60 * 1000 };
+    res.cookie("Token", newAccessToken, cookieOptions);
+
+    return res.status(200).json({ error: false, message: "Access token refreshed", token: newAccessToken });
+  } catch (error) {
+    next(error);
+  }
+}

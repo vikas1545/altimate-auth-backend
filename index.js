@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
-dotenv.config(); 
+import cookieParser from "cookie-parser";
+dotenv.config();
 
 const startApp = async () => {
   const express = (await import('express')).default;
@@ -11,6 +12,8 @@ const startApp = async () => {
   const port = 5500;
 
   app.use(express.json());
+  app.use(cookieParser());
+
   app.use('/api/auth', authRoutes);
   app.use(errorHandler);
 
