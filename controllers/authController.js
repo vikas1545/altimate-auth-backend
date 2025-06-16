@@ -85,14 +85,14 @@ export const loginController = async (req, res, next) => {
       throw new ErrorHandller("Wrong username or password !", 401)
     }
 
-    const { token, refreshToken } = generateToken(user);
+    const { token, refreshToken } = generateToken(user, process.env.LOGIN_SECRET);
     const cookieOptions = {
       httpOnly: true,
       secure: true,
-      maxAge: 60 * 60 * 1000,
+      maxAge: 1 * 60 * 1000,
     };
-    res.cookie("Token", token, cookieOptions);
-    res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie("token", token, cookieOptions);
+    res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 5 * 60 * 1000 });
 
     return res.status(200).json({ error: false, message: "Success", token, refreshToken });
   } catch (error) {
@@ -108,20 +108,106 @@ export const refreshTokenController = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, "LOGIN_SECRET");
+    const decoded = jwt.verify(refreshToken, process.env.LOGIN_SECRET);
 
     const user = await User.findUser({ id: decoded.id });
 
     if (!user) {
       throw new ErrorHandller("User not found", 404);
     }
-    const { token: newAccessToken } = generateToken(user);
-    res.clearCookie("Token");
+    const { token: newAccessToken } = generateToken(user, process.env.LOGIN_SECRET);
+    res.clearCookie("token");
     const cookieOptions = { httpOnly: true, secure: true, maxAge: 60 * 60 * 1000 };
-    res.cookie("Token", newAccessToken, cookieOptions);
+    res.cookie("token", newAccessToken, cookieOptions);
 
     return res.status(200).json({ error: false, message: "Access token refreshed", token: newAccessToken });
   } catch (error) {
     next(error);
   }
+}
+
+export const verifyEmailController = async (req, res, next) => {
+  const errors = checkFieldsError(req);
+  if (errors) {
+    return res.status(400).json({ errors });
+  }
+  const { otp, userId } = req.body;
+  try {
+    const user = await findUser({ id: userId });
+    if (!user) {
+      throw new ErrorHandller("User not found with this id!", 404)
+    }
+    if (user.otp !== otp) {
+      throw new ErrorHandller("Entered Invalid OTP!", 400)
+    }
+    if (user.email_verified) {
+      throw new ErrorHandller("Email Already Verified", 403)
+    }
+    await User.findByIdAndUpdate(userId, { email_verified: true });
+    res.status(200).json({ error: false, message: "Email verified successfully" })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const forgetPasswordController = async (req, res, next) => {
+  const { email } = req.body;
+  try {
+    if (!email) {
+      throw new ErrorHandller("Email is required", 400)
+    }
+    const user = await findUser({ email })
+    if (!user) {
+      throw new ErrorHandller("No user found with this email", 404)
+    }
+    const { token } = generateToken(user, process.env.PASS_SECRET);
+    const verificationLink = `${process.env.FORGET_PASS_URL}?token=${token}`;
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: user?.email,
+      subject: 'Forget Password',
+      text: `Bellow link is valid for 1 hour only`,
+      html: `<b>Go for new password by clicking this</b> <a href=${verificationLink}>forget password link</a>`
+    }
+
+    await transporter.sendMail(mailOptions)
+    return res.status(200).json({ error: false, message: 'Please checck your email and go for new password' });
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const resetPasswordController = async (req, res, next) => {
+  const { password, token: receivedToken } = req.body;
+  try {
+    if (!password) {
+      throw new ErrorHandller("Password is required!")
+    }
+
+    if (!receivedToken) {
+      throw new ErrorHandller("Token is required", 404)
+    }
+    const { err, decoded } = jwt.verify(token, process.env.PASS_SECRET, (err, decoded) => {
+      return { err, decoded }
+    });
+
+    if (err) {
+      throw new ErrorHandller("Token is invalid or Expired!", 401)
+    }
+
+    const user = await findUser({ id: decoded.id })
+    if (!user) {
+      throw new ErrorHandller("No user found with this token ", 404)
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    await User.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    res.status(200).json({ error: false, message: "Password changed successfully" })
+
+  } catch (error) {
+    next(error)
+  }
+
 }
