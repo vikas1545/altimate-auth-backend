@@ -30,14 +30,26 @@ export const getUserByIdController = async (req, res, next) => {
     delete userObj.refreshToken;
     delete userObj.otp;
 
-    res.status(200).json({ message: 'Success', data: userObj })
-
-    next()
+    return res.status(200).json({ message: 'Success', data: userObj })
   } catch (error) {
     next(error)
   }
 
 
+}
+
+export const getAllUsersController = async (req, res, next) => {
+
+  try {
+    const { role } = req.user;
+    if (role !== "admin") {
+      throw new ErrorHandller("Access denied: Admins only", 403);
+    }
+    const users = await User.find().select("-password -otp -refreshToken");
+    return res.status(200).json({ message: 'Success', data: users })
+  } catch (error) {
+    next(error)
+  }
 }
 
 export const registerController = async (req, res, next) => {
@@ -46,7 +58,7 @@ export const registerController = async (req, res, next) => {
     if (errors) {
       return res.status(400).json({ errors });
     }
-    const { username, email, password } = req.body;
+    const { username, email, password,role } = req.body;
     const userExist = await findUser({ email, username });
 
     if (userExist) {
@@ -55,7 +67,7 @@ export const registerController = async (req, res, next) => {
 
     const hashedPassword = await hashPassword(password);
     const otp = generateOtp()
-    const savedData = await createUser(username, email, hashedPassword, otp);
+    const savedData = await createUser(username, email, hashedPassword, otp,role);
     const verificationLink = `${process.env.VERIFICATION_URL}?userid=${savedData._id}`;
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -66,7 +78,10 @@ export const registerController = async (req, res, next) => {
     }
 
     await transporter.sendMail(mailOptions)
-    return res.status(201).json({ error: false, data: { id: savedData._id, username: savedData.username, email: savedData.email } });
+    return res.status(201).json({
+      error: false,
+      data: { id: savedData._id, username: savedData.username, email: savedData.email }
+    });
   } catch (error) {
     next(error)
   }
@@ -87,7 +102,7 @@ export const loginController = async (req, res, next) => {
       throw new ErrorHandller("Wrong username or password !", 401)
     }
 
-    const { token, refreshToken } = generateToken(user, process.env.LOGIN_SECRET);
+    const { token, refreshToken } = generateToken(user, process.env.LOGIN_SECRET,);
     const cookieOptions = {
       httpOnly: true,
       secure: true,
@@ -96,6 +111,7 @@ export const loginController = async (req, res, next) => {
 
     user.isLoggedIn = true;
     await user.save();
+
 
     res.cookie("token", token, cookieOptions);
     res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 5 * 60 * 1000 });
@@ -153,7 +169,7 @@ export const verifyEmailController = async (req, res, next) => {
       throw new ErrorHandller("Email Already Verified", 403)
     }
     await User.findByIdAndUpdate(userId, { email_verified: true });
-    res.status(200).json({ error: false, message: "Email verified successfully" })
+    return res.status(200).json({ error: false, message: "Email verified successfully" })
   } catch (error) {
     next(error)
   }
@@ -215,10 +231,7 @@ export const resetPasswordController = async (req, res, next) => {
 
     await User.findByIdAndUpdate(user._id, { password: hashedPassword });
 
-    return res.status(200).json({
-      error: false,
-      message: "Password changed successfully"
-    });
+    return res.status(200).json({ error: false, message: "Password changed successfully" });
 
   } catch (error) {
 
