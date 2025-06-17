@@ -22,6 +22,10 @@ const userSchema = new Schema({
     type: String,
     //required: true,
   },
+  isLoggedIn: {
+    type: Boolean,
+    default: false
+  },
   otp: {
     type: String,
     max: 6,

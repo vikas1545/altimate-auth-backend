@@ -10,18 +10,20 @@ import { transporter } from "../utils/mailHandler.js";
 import jwt from "jsonwebtoken";
 
 export const getUserByIdController = async (req, res, next) => {
-  const userId = req.params['userId'];
+  const { id } = req.user;
 
-  if (!userId) {
+  if (!id) {
     throw new ErrorHandller("UserId is required", 400);
   }
 
   try {
-    const user = await User.findOne({ _id: userId });
+    const user = await User.findOne({ _id: id });
     if (!user) {
       throw new ErrorHandller("User not found", 404);
     }
-
+    if (!user.isLoggedIn) {
+      throw new ErrorHandller("Unathorized", 401)
+    }
     const userObj = user.toObject();
 
     delete userObj.password;
@@ -91,6 +93,10 @@ export const loginController = async (req, res, next) => {
       secure: true,
       maxAge: 1 * 60 * 1000,
     };
+
+    user.isLoggedIn = true;
+    await user.save();
+
     res.cookie("token", token, cookieOptions);
     res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 5 * 60 * 1000 });
 
@@ -137,6 +143,9 @@ export const verifyEmailController = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandller("User not found with this id!", 404)
     }
+    if (!user.isLoggedIn) {
+      throw new ErrorHandller("Unathorized", 401)
+    }
     if (user.otp !== otp) {
       throw new ErrorHandller("Entered Invalid OTP!", 400)
     }
@@ -160,6 +169,9 @@ export const forgetPasswordController = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandller("No user found with this email", 404)
     }
+    if (!user.isLoggedIn) {
+      throw new ErrorHandller("Unathorized", 401)
+    }
     const { token } = generateToken(user, process.env.PASS_SECRET);
     const verificationLink = `${process.env.FORGET_PASS_URL}?token=${token}`;
     const mailOptions = {
@@ -178,36 +190,64 @@ export const forgetPasswordController = async (req, res, next) => {
 }
 
 export const resetPasswordController = async (req, res, next) => {
-  const { password, token: receivedToken } = req.body;
+  const { password, token } = req.body;
+
   try {
     if (!password) {
-      throw new ErrorHandller("Password is required!")
+      throw new ErrorHandller("Password is required!", 400);
     }
 
-    if (!receivedToken) {
-      throw new ErrorHandller("Token is required", 404)
-    }
-    const { err, decoded } = jwt.verify(token, process.env.PASS_SECRET, (err, decoded) => {
-      return { err, decoded }
-    });
-
-    if (err) {
-      throw new ErrorHandller("Token is invalid or Expired!", 401)
+    if (!token) {
+      throw new ErrorHandller("Token is required", 400);
     }
 
-    const user = await findUser({ id: decoded.id })
+    const decoded = jwt.verify(token, process.env.PASS_SECRET);
+
+    const user = await findUser({ id: decoded.id });
     if (!user) {
-      throw new ErrorHandller("No user found with this token ", 404)
+      throw new ErrorHandller("No user found with this token", 404);
+    }
+    if (!user.isLoggedIn) {
+      throw new ErrorHandller("Unathorized", 401)
     }
 
     const hashedPassword = await hashPassword(password);
 
     await User.findByIdAndUpdate(user._id, { password: hashedPassword });
 
-    res.status(200).json({ error: false, message: "Password changed successfully" })
+    return res.status(200).json({
+      error: false,
+      message: "Password changed successfully"
+    });
 
+  } catch (error) {
+
+    if (error.name === 'TokenExpiredError') {
+      return next(new ErrorHandller("Reset token has expired", 401));
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return next(new ErrorHandller("Invalid reset token", 401));
+    }
+    next(error);
+  }
+};
+
+export const logoutController = async (req, res, next) => {
+  const { id } = req.user;
+  try {
+    const user = await findUser({ id });
+    if (!user) {
+      throw new ErrorHandller("No user found with this id", 404)
+    }
+    if (!user.isLoggedIn) {
+      throw new ErrorHandller("Unathorized", 401)
+    }
+    user.isLoggedIn = false;
+    await user.save();
+    res.clearCookie('token', { httpOnly: true, secure: false, sameSite: 'Lax' })
+    res.clearCookie('refreshToken', { httpOnly: true, secure: false, sameSite: 'Lax' })
+    return res.status(200).json({ error: false, message: "Logged out successfully" });
   } catch (error) {
     next(error)
   }
-
 }

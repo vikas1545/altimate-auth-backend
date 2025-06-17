@@ -9,7 +9,7 @@ const startApp = async () => {
   const { errorHandler } = await import('./middlewares/errorMiddleware.js');
 
   const app = express();
-  const port = 5500;
+  const port = process.env.PORT;
 
   app.use(express.json());
   app.use(cookieParser());
