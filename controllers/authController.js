@@ -1,6 +1,7 @@
 
 import User from "../models/userModel.js";
 import { createUser, findUser } from "../services/authServices.js";
+import { sendOTPVerification } from "../services/smsServices.js";
 import { generateToken } from "../utils/authHandler.js";
 import checkFieldsError from "../utils/checkFieldsError.js";
 import { ErrorHandller } from "../utils/errorHandler.js";
@@ -18,12 +19,14 @@ export const getUserByIdController = async (req, res, next) => {
 
   try {
     const user = await User.findOne({ _id: id });
+
     if (!user) {
       throw new ErrorHandller("User not found", 404);
     }
     if (!user.isLoggedIn) {
       throw new ErrorHandller("Unathorized", 401)
     }
+
     const userObj = user.toObject();
 
     delete userObj.password;
@@ -58,7 +61,7 @@ export const registerController = async (req, res, next) => {
     if (errors) {
       return res.status(400).json({ errors });
     }
-    const { username, email, password,role } = req.body;
+    const { username, email, password, role } = req.body;
     const userExist = await findUser({ email, username });
 
     if (userExist) {
@@ -67,7 +70,7 @@ export const registerController = async (req, res, next) => {
 
     const hashedPassword = await hashPassword(password);
     const otp = generateOtp()
-    const savedData = await createUser(username, email, hashedPassword, otp,role);
+    const savedData = await createUser(username, email, hashedPassword, otp, role);
     const verificationLink = `${process.env.VERIFICATION_URL}?userid=${savedData._id}`;
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -106,15 +109,15 @@ export const loginController = async (req, res, next) => {
     const cookieOptions = {
       httpOnly: true,
       secure: true,
-      maxAge: 1 * 60 * 1000,
+      maxAge: 60 * 60 * 1000,
     };
 
     user.isLoggedIn = true;
     await user.save();
 
 
-    res.cookie("token", token, cookieOptions);
-    res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 5 * 60 * 1000 });
+    res.cookie("token", token, { ...cookieOptions });
+    res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
 
     return res.status(200).json({ error: false, message: "Success", token, refreshToken });
   } catch (error) {
@@ -260,6 +263,56 @@ export const logoutController = async (req, res, next) => {
     res.clearCookie('token', { httpOnly: true, secure: false, sameSite: 'Lax' })
     res.clearCookie('refreshToken', { httpOnly: true, secure: false, sameSite: 'Lax' })
     return res.status(200).json({ error: false, message: "Logged out successfully" });
+  } catch (error) {
+    next(error)
+  }
+}
+
+
+export const sendOtpController = async (req, res, next) => {
+  const { phone } = req.body
+  try {
+    if (!phone) {
+      throw new ErrorHandller("Phone no is reqired", 400)
+    }
+    const user = await findUser({ id: req.user.id });
+    if (!user) {
+      throw new ErrorHandller("No user found", 404)
+    }
+    const otp = generateOtp();
+    if (user.otp) {
+      await User.findByIdAndUpdate(user.id, { otp: otp })
+    } else {
+      user.otp = otp;
+      await user.save()
+    }
+
+    await sendOTPVerification(phone, otp);
+
+    return res.status(200).json({ error: false, message: 'An OTP has been sent on register phone no' })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const phoneVerificationController = async (req, res, next) => {
+  const { otp } = req.body;
+  try {
+    const user = await findUser({ id: req.user.id });
+    if (!user) {
+      throw new ErrorHandller("User not found with this id!", 404)
+    }
+    if (!user.isLoggedIn) {
+      throw new ErrorHandller("Unathorized", 401)
+    }
+    if (user.otp !== otp) {
+      throw new ErrorHandller("Entered Invalid OTP!", 400)
+    }
+    if (user.phone_verified) {
+      throw new ErrorHandller("Phone Already Verified", 403)
+    }
+    await User.findByIdAndUpdate(user.id, { phone_verified: true });
+    return res.status(200).json({ error: false, message: "Phone verified successfully" })
   } catch (error) {
     next(error)
   }
