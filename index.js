@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 dotenv.config();
 
 const startApp = async () => {
@@ -10,7 +11,7 @@ const startApp = async () => {
 
   const app = express();
   const port = process.env.PORT;
-
+  app.use(helmet());
   app.use(express.json());
   app.use(cookieParser());
 

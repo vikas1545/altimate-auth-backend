@@ -5,9 +5,10 @@ import {
 } from "../controllers/authController.js";
 import { validateOtpVerification, validateRegistrationRules } from "../middlewares/validationMiddlewere.js";
 import { authenticatedRoutes, authorizeRoles } from "../middlewares/authMiddleware.js";
+import {loginLimiter} from "../middlewares/LoginLimiter.js";
 const router = express.Router();
 
-router.post("/login", loginController);
+router.post("/login",loginLimiter, loginController);
 router.post("/logout", authenticatedRoutes, logoutController);
 router.get("/user", authenticatedRoutes, getUserByIdController);
 router.get("/users", authenticatedRoutes, authorizeRoles("admin"), getAllUsersController);
