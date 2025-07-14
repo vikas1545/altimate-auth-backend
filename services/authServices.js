@@ -17,3 +17,9 @@ export const createUser = async (username, email, hashedPassword, otp) => {
   user.otp = otp;
   return await user.save();
 };
+
+export const deleteUserById = async (id) => {
+  const deletedUser = await User.findByIdAndDelete(id);
+  return deletedUser || null;
+
+}

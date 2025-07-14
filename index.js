@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import cors  from "cors"
 dotenv.config();
 
 const startApp = async () => {
@@ -11,6 +12,17 @@ const startApp = async () => {
 
   const app = express();
   const port = process.env.PORT;
+  app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || origin.startsWith('http://localhost')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
   app.use(helmet());
   app.use(express.json());
   app.use(cookieParser());

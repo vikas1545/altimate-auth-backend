@@ -4,10 +4,10 @@ import { ErrorHandller } from "../utils/errorHandler.js";
 import jwt from "jsonwebtoken";
 
 export const authenticatedRoutes = async (req, res, next) => {
+
   try {
-    let token = req.cookies?.token || req.header('Authorization')?.replace('Bearer ', '');
-  
-    
+    // let token = req.cookies?.token || req.header('Authorization')?.replace('Bearer ', '');
+    let token = req.cookies?.token;
     if (!token && req.cookies?.refreshToken) {
       const refreshDecoded = jwt.verify(req.cookies.refreshToken, process.env.LOGIN_SECRET);
       const user = await findUser({ id: refreshDecoded.id });

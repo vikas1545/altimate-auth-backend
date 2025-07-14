@@ -1,6 +1,6 @@
 
 import User from "../models/userModel.js";
-import { createUser, findUser } from "../services/authServices.js";
+import { createUser, deleteUserById, findUser } from "../services/authServices.js";
 import { sendOTPVerification } from "../services/smsServices.js";
 import { generateToken } from "../utils/authHandler.js";
 import checkFieldsError from "../utils/checkFieldsError.js";
@@ -45,9 +45,9 @@ export const getAllUsersController = async (req, res, next) => {
 
   try {
     const { role } = req.user;
-    if (role !== "admin") {
-      throw new ErrorHandller("Access denied: Admins only", 403);
-    }
+    // if (role !== "admin") {
+    //   throw new ErrorHandller("Access denied: Admins only", 403);
+    // }
     const users = await User.find().select("-password -otp -refreshToken");
     return res.status(200).json({ message: 'Success', data: users })
   } catch (error) {
@@ -119,7 +119,7 @@ export const loginController = async (req, res, next) => {
     res.cookie("token", token, { ...cookieOptions });
     res.cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
 
-    return res.status(200).json({ error: false, message: "Success", token, refreshToken });
+    return res.status(200).json({ error: false, message: "Success", data: [token, refreshToken] });
   } catch (error) {
     next(error)
   }
@@ -188,21 +188,21 @@ export const forgetPasswordController = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandller("No user found with this email", 404)
     }
-    if (!user.isLoggedIn) {
-      throw new ErrorHandller("Unathorized", 401)
-    }
+    // if (!user.isLoggedIn) {
+    //   throw new ErrorHandller("Unathorized", 401)
+    // }
     const { token } = generateToken(user, process.env.PASS_SECRET);
-    const verificationLink = `${process.env.FORGET_PASS_URL}?token=${token}`;
+    const verificationLink = `${process.env.RESET_PASS_URL}?token=${token}`;
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: user?.email,
-      subject: 'Forget Password',
+      subject: 'Reset Password',
       text: `Bellow link is valid for 1 hour only`,
-      html: `<b>Go for new password by clicking this</b> <a href=${verificationLink}>forget password link</a>`
+      html: `<b>Go for new password by clicking this</b> <a href=${verificationLink}>reset password link</a>`
     }
 
     await transporter.sendMail(mailOptions)
-    return res.status(200).json({ error: false, message: 'Please checck your email and go for new password' });
+    return res.status(200).json({ error: false, message: 'Please check your email and go for new password' });
   } catch (error) {
     next(error)
   }
@@ -226,9 +226,9 @@ export const resetPasswordController = async (req, res, next) => {
     if (!user) {
       throw new ErrorHandller("No user found with this token", 404);
     }
-    if (!user.isLoggedIn) {
-      throw new ErrorHandller("Unathorized", 401)
-    }
+    // if (!user.isLoggedIn) {
+    //   throw new ErrorHandller("Unathorized", 401)
+    // }
 
     const hashedPassword = await hashPassword(password);
 
@@ -317,3 +317,23 @@ export const phoneVerificationController = async (req, res, next) => {
     next(error)
   }
 }
+
+export const deleteUserByIdController = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!id) {
+      throw new ErrorHandller("Invalid Id", 400);
+    }
+
+    const user = await deleteUserById(id);
+
+    if (!user) {
+      throw new ErrorHandller("User not found", 404);
+    }
+
+    res.status(200).json({ error: false, message: 'User deleted successfully' });
+
+  } catch (error) {
+    next(error);
+  }
+};
