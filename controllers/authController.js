@@ -248,6 +248,36 @@ export const resetPasswordController = async (req, res, next) => {
   }
 };
 
+export const changePasswordController = async (req, res, next) => {
+  const { password } = req.body;
+  const { id } = req.user;
+
+  if (!id) {
+    throw new ErrorHandller("UserId is required", 400);
+  }
+
+  try {
+    if (!password) {
+      throw new ErrorHandller("Password is required!", 400);
+    }
+
+
+    const user = await findUser({ id });
+    if (!user) {
+      throw new ErrorHandller("No user found with this token", 404);
+    }
+    
+    const hashedPassword = await hashPassword(password);
+
+    await User.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    return res.status(200).json({ error: false, message: "Password changed successfully" });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const logoutController = async (req, res, next) => {
   const { id } = req.user;
   try {

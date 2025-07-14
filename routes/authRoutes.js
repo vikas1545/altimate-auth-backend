@@ -1,5 +1,6 @@
 import express from "express";
 import {
+    changePasswordController,
     deleteUserByIdController,
     forgetPasswordController, getAllUsersController, getUserByIdController, loginController, logoutController,
     phoneVerificationController, registerController, resetPasswordController, sendOtpController, verifyEmailController
@@ -18,6 +19,7 @@ router.post("/register", validateRegistrationRules, registerController);
 router.post("/email-verification", validateOtpVerification, verifyEmailController);
 router.post("/forget-password", forgetPasswordController);
 router.post("/reset-password", resetPasswordController);
+router.post("/change-password",authenticatedRoutes, changePasswordController);
 router.post("/send-phone-otp", authenticatedRoutes, sendOtpController);
 router.post("/phone-verification", authenticatedRoutes, phoneVerificationController);
 router.delete("/delete-user/:id", authenticatedRoutes, deleteUserByIdController);
